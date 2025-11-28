@@ -1,23 +1,69 @@
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useEffect, useRef } from "react";
+import { View, Text, StyleSheet, Animated, Image, Dimensions } from "react-native";
 import { useRouter } from "expo-router";
 
 export default function Welcome() {
   const router = useRouter();
 
-  const handleStart = async () => {
-    await AsyncStorage.setItem("welcome_seen", "true");
-    router.replace("/"); // go to home screen
-  };
+  const slideAnim = useRef(new Animated.Value(40)).current;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.6)).current;
+
+  useEffect(() => {
+    // Run animation sequence: fade + scale + slide
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 1200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(scaleAnim, {
+        toValue: 1,
+        duration: 1200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 1200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Auto navigate after 5 sec
+    const timer = setTimeout(() => {
+      router.replace("/");
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Welcome 🎉</Text>
-      <Text style={styles.subtitle}>GPA / CGPA Calculator App</Text>
+      <Animated.Image
+        source={require("../assets/images/icon.png")}
+        style={[
+          styles.logo,
+          {
+            opacity: fadeAnim,
+            transform: [
+              { translateY: slideAnim },
+              { scale: scaleAnim },
+            ],
+          },
+        ]}
+        resizeMode="contain"
+      />
 
-      <TouchableOpacity style={styles.button} onPress={handleStart}>
-        <Text style={styles.btnText}>Continue</Text>
-      </TouchableOpacity>
+      <Animated.Text
+        style={[
+          styles.title,
+          { opacity: fadeAnim }
+        ]}
+      >
+        GPA / CGPA Calculator
+      </Animated.Text>
+
+      <Text style={styles.loading}>Loading...</Text>
     </View>
   );
 }
@@ -27,29 +73,23 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: "#FFFFFF",
     padding: 20,
-    backgroundColor: "#fff",
+  },
+  logo: {
+    width: 180,
+    height: 180,
+    marginBottom: 20,
   },
   title: {
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: "bold",
-    marginBottom: 10,
+    marginTop: 10,
+    color: "#333",
   },
-  subtitle: {
-    fontSize: 18,
-    marginBottom: 40,
-    textAlign: "center",
-    color: "#444",
-  },
-  button: {
-    backgroundColor: "#0077ff",
-    padding: 15,
-    borderRadius: 12,
-    width: "70%",
-  },
-  btnText: {
-    textAlign: "center",
-    color: "#fff",
-    fontSize: 18,
+  loading: {
+    marginTop: 30,
+    fontSize: 16,
+    color: "#0077ff",
   },
 });

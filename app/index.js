@@ -12,9 +12,9 @@ export default function Home() {
         </TouchableOpacity>
       </Link>
 
-      <Link href="/cgpa" asChild>
+      <Link href="/ogpa" asChild>
         <TouchableOpacity style={styles.button}>
-          <Text style={styles.btnText}>Calculate CGPA</Text>
+          <Text style={styles.btnText}>Calculate OGPA</Text>
         </TouchableOpacity>
       </Link>
     </View>
