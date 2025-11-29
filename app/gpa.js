@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,8 +8,16 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
+  Platform,
+  UIManager,
+  LayoutAnimation,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+
+// Enable animation on Android
+if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 // Round to 2 decimals
 const round2 = (value) => Math.round(value * 100) / 100;
@@ -29,6 +37,8 @@ export default function GPA() {
   const [gpa, setGpa] = useState(null);
   const [history, setHistory] = useState([]);
   const [editingRecord, setEditingRecord] = useState(null);
+
+  const scrollRef = useRef(null);
 
   useEffect(() => {
     loadHistory();
@@ -51,15 +61,18 @@ export default function GPA() {
   };
 
   const addSubject = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSubjects([...subjects, createSubject()]);
   };
 
   const deleteSubject = (index) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     const updated = subjects.filter((_, i) => i !== index);
     setSubjects(updated);
   };
 
   const clearAllFields = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setSemesterName("");
     setGpa(null);
     setEditingRecord(null);
@@ -74,17 +87,27 @@ export default function GPA() {
 
   // 🎯 GPA = Σ(Ci×GPi) / ΣCi
   const calculateGPA = () => {
+    // 🔍 VALIDATION
+    for (let i = 0; i < subjects.length; i++) {
+      const s = subjects[i];
+      if (!s.code.trim() || !s.credit.trim() || !s.grade.trim()) {
+        Alert.alert("Missing Fields", `Fill all fields in Subject ${i + 1}`);
+        return;
+      }
+      if (isNaN(s.credit) || isNaN(s.grade)) {
+        Alert.alert("Invalid Input", `Credit & Grade must be numbers (Subject ${i + 1})`);
+        return;
+      }
+    }
+
     let totalCredits = 0;
     let totalWeighted = 0;
 
     subjects.forEach((s) => {
       const c = parseFloat(s.credit);
       const g = parseFloat(s.grade);
-
-      if (!isNaN(c) && !isNaN(g)) {
-        totalCredits += c;
-        totalWeighted += c * g;
-      }
+      totalCredits += c;
+      totalWeighted += c * g;
     });
 
     if (totalCredits === 0) {
@@ -92,10 +115,8 @@ export default function GPA() {
       return;
     }
 
-    const raw = totalWeighted / totalCredits;
-    const rounded = round2(raw);
-
-    setGpa(rounded.toFixed(2));
+    const rounded = round2(totalWeighted / totalCredits).toFixed(2);
+    setGpa(rounded);
 
     if (editingRecord) {
       const updatedHistory = history.map((item) =>
@@ -103,8 +124,10 @@ export default function GPA() {
           ? {
               ...item,
               name: semesterName,
-              gpa: rounded.toFixed(2),
+              gpa: rounded,
               subjects,
+              totalCredits,
+              totalWeighted,
               date: new Date().toLocaleString(),
             }
           : item
@@ -112,57 +135,61 @@ export default function GPA() {
 
       updateHistory(updatedHistory);
       setEditingRecord(null);
-      return;
+    } else {
+      const record = {
+        id: Date.now().toString(),
+        name: semesterName || "Unnamed Semester",
+        gpa: rounded,
+        subjects,
+        totalCredits,
+        totalWeighted,
+        date: new Date().toLocaleString(),
+      };
+
+      saveHistory(record);
     }
 
-    const record = {
-      id: Date.now().toString(),
-      name: semesterName || "Unnamed Semester",
-      gpa: rounded.toFixed(2),
-      subjects,
-      totalCredits: totalCredits,     
-      totalWeighted: totalWeighted,
-      date: new Date().toLocaleString(),
-    };
+    // 🎨 SMOOTH CLEAR ANIMATION
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
 
-    saveHistory(record);
+    // 🧹 CLEAR INPUT FIELDS
+    setSemesterName("");
+    setSubjects(Array.from({ length: 5 }, () => createSubject()));
+    setEditingRecord(null);
+
+    // 📜 AUTO SCROLL TO SHOW RESULT
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 300);
   };
 
   const deleteRecord = (id) => {
-    Alert.alert(
-      "Delete Record",
-      "Are you sure you want to delete this record?",
-      [
-        { text: "Cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            const updated = history.filter((item) => item.id !== id);
-            setHistory(updated);
-            await AsyncStorage.setItem("gpa_history", JSON.stringify(updated));
-          },
+    Alert.alert("Delete Record", "Are you sure you want to delete this record?", [
+      { text: "Cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          const updated = history.filter((item) => item.id !== id);
+          setHistory(updated);
+          await AsyncStorage.setItem("gpa_history", JSON.stringify(updated));
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const clearAll = () => {
-    Alert.alert(
-      "Clear All Records",
-      "This will delete ALL GPA records. Continue?",
-      [
-        { text: "Cancel" },
-        {
-          text: "Clear All",
-          style: "destructive",
-          onPress: async () => {
-            setHistory([]);
-            await AsyncStorage.removeItem("gpa_history");
-          },
+    Alert.alert("Clear All Records", "This will delete ALL GPA records. Continue?", [
+      { text: "Cancel" },
+      {
+        text: "Clear All",
+        style: "destructive",
+        onPress: async () => {
+          setHistory([]);
+          await AsyncStorage.removeItem("gpa_history");
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const editRecord = (record) => {
@@ -180,7 +207,7 @@ export default function GPA() {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView style={styles.container} ref={scrollRef}>
       <Text style={styles.title}>GPA Calculator</Text>
 
       <TextInput
@@ -192,23 +219,22 @@ export default function GPA() {
 
       <Text style={styles.subtitle}>Subjects</Text>
       <View style={styles.subjectHeaderRow}>
-        <Text style={[styles.subjectHeaderText, { flex: 1 }]}>Subject Code</Text>
-        <Text style={[styles.subjectHeaderText, { flex: 1 }]}>Credit Hours</Text>
+        <Text style={[styles.subjectHeaderText, { flex: 1.2 }]}>Subject Code</Text>
+        <Text style={[styles.subjectHeaderText, { flex: 1 }]}>Credit Hour</Text>
         <Text style={[styles.subjectHeaderText, { flex: 1 }]}>Grade Point</Text>
+        <Text style={[styles.subjectHeaderText, { width: 35 }]}></Text>
       </View>
 
       {/* SUBJECT LIST */}
       {subjects.map((s, i) => (
         <View key={i} style={styles.rowBlock}>
-          {/* Subject Code */}
           <TextInput
-            style={[styles.inputSmall, { flex: 1.5 }]}
+            style={[styles.inputSmall, { flex: 1.3 }]}
             placeholder="Code"
             value={s.code}
             onChangeText={(v) => updateSubject(i, "code", v)}
           />
 
-          {/* Credit */}
           <TextInput
             style={[styles.inputSmall, { flex: 1 }]}
             placeholder="Cr"
@@ -217,7 +243,6 @@ export default function GPA() {
             onChangeText={(v) => updateSubject(i, "credit", v)}
           />
 
-          {/* Grade */}
           <TextInput
             style={[styles.inputSmall, { flex: 1 }]}
             placeholder="GP"
@@ -226,27 +251,20 @@ export default function GPA() {
             onChangeText={(v) => updateSubject(i, "grade", v)}
           />
 
-          {/* Delete Subject Row */}
-          <TouchableOpacity
-            onPress={() => deleteSubject(i)}
-            style={styles.deleteBtn}
-          >
+          <TouchableOpacity onPress={() => deleteSubject(i)} style={styles.deleteBtn}>
             <Text style={styles.delText}>✖</Text>
           </TouchableOpacity>
         </View>
       ))}
 
-      {/* ADD SUBJECT BUTTON */}
       <TouchableOpacity style={styles.addButton} onPress={addSubject}>
         <Text style={styles.addText}>+ Add Subject</Text>
       </TouchableOpacity>
 
-      {/* CLEAR ALL INPUT FIELDS */}
       <TouchableOpacity style={styles.clearInputFields} onPress={clearAllFields}>
         <Text style={styles.clearInputText}>Clear All Fields</Text>
       </TouchableOpacity>
 
-      {/* CALCULATE BUTTON */}
       <Button
         title={editingRecord ? "Update GPA Record" : "Calculate GPA"}
         onPress={calculateGPA}
@@ -254,7 +272,6 @@ export default function GPA() {
 
       {gpa && <Text style={styles.result}>Semester GPA: {gpa}</Text>}
 
-      {/* HISTORY */}
       <Text style={styles.subtitle}>Recent GPA Records</Text>
 
       {history.length === 0 ? (
@@ -290,6 +307,7 @@ export default function GPA() {
   );
 }
 
+// STYLES
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 20 },
   title: { fontSize: 28, fontWeight: "bold", textAlign: "center" },
@@ -306,7 +324,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     marginBottom: 10,
   },
-  
+
   subjectHeaderRow: {
     flexDirection: "row",
     marginBottom: 8,
@@ -319,7 +337,6 @@ const styles = StyleSheet.create({
     color: "#444",
   },
 
-  /* --- Subject Row Style --- */
   rowBlock: {
     flexDirection: "row",
     alignItems: "center",
@@ -375,7 +392,6 @@ const styles = StyleSheet.create({
     color: "#0077ff",
   },
 
-  /* --- History Section --- */
   historyItem: {
     backgroundColor: "#f9f9f9",
     padding: 12,
@@ -397,5 +413,9 @@ const styles = StyleSheet.create({
   deleteText: { color: "red", fontWeight: "600" },
 
   clearAll: { marginTop: 20, alignSelf: "center" },
-  clearAllText: { color: "red", fontSize: 16, fontWeight: "700" },
+  clearAllText: {
+    color: "red",
+    fontSize: 16,
+    fontWeight: "700",
+  },
 });
