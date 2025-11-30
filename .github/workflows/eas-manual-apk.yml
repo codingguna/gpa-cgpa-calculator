@@ -1,0 +1,86 @@
+name: Manual EAS APK Build (Auto Version)
+
+on:
+  workflow_dispatch:   # manual trigger only
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout repo
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      # 2. Extract Repo Name
+      - name: Read repo name
+        id: repo
+        run: echo "repo_name=${GITHUB_REPOSITORY##*/}" >> $GITHUB_OUTPUT
+
+      # 3. Read & Auto Increment version in app.json
+      - name: Auto-Increment Version
+        id: versioning
+        run: |
+          CURRENT_VERSION=$(jq -r '.expo.version' app.json)
+          IFS='.' read -r major minor patch <<< "$CURRENT_VERSION"
+          NEW_VERSION="$major.$minor.$((patch+1))"
+
+          # Write new version back to app.json
+          jq ".expo.version = \"$NEW_VERSION\"" app.json > tmp.$$.json && mv tmp.$$.json app.json
+
+          echo "new_version=$NEW_VERSION" >> $GITHUB_OUTPUT
+
+      # 4. Commit updated version back to repo
+      - name: Commit version bump
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add app.json
+          git commit -m "Auto version bump to ${{ steps.versioning.outputs.new_version }}" || echo "No changes to commit"
+          git push || echo "No push (fork PR case)"
+
+      # 5. Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18
+
+      # 6. Install EAS & Expo CLI
+      - name: Install Expo & EAS
+        run: |
+          npm install -g eas-cli
+          npm install -g expo-cli
+
+      # 7. Install dependencies
+      - name: Install Dependencies
+        run: yarn install
+
+      # 8. Login to Expo
+      - name: Expo Login
+        run: eas login --token ${{ secrets.EXPO_TOKEN }}
+
+      # 9. Build APK using EAS
+      - name: EAS Build (APK)
+        run: eas build --platform android --profile preview --non-interactive
+
+      # 10. Download latest EAS artifact
+      - name: Download artifact
+        run: |
+          URL=$(eas build:list --json --limit=1 | jq -r '.[0].artifacts.buildUrl')
+
+          APK_NAME="${{ steps.repo.outputs.repo_name }}_v${{ steps.versioning.outputs.new_version }}.apk"
+
+          echo "Downloading: $URL"
+          curl -o "$APK_NAME" "$URL"
+
+          echo "apk_file=$APK_NAME" >> $GITHUB_OUTPUT
+
+      # 11. Publish GitHub Release
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: "v${{ steps.versioning.outputs.new_version }}"
+          name: "Version ${{ steps.versioning.outputs.new_version }}"
+          files: ${{ steps.apk.outputs.apk_file }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

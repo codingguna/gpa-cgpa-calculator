@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+// app/gpa.js
+import React, { useState, useEffect, useRef, useContext } from "react";
 import {
   View,
   Text,
@@ -8,32 +9,25 @@ import {
   ScrollView,
   TouchableOpacity,
   Alert,
-  Platform,
-  UIManager,
   LayoutAnimation,
+  UIManager,
+  Platform,
+  SafeAreaView,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import ThemeToggle from "../components/ThemeToggle";
+import { ThemeContext } from "../components/ThemeContext";
 
-// Enable animation on Android
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
-// Round to 2 decimals
-const round2 = (value) => Math.round(value * 100) / 100;
 
-// Create an empty subject entry
-const createSubject = () => ({
-  code: "",
-  credit: "",
-  grade: "",
-});
+const round2 = (v) => Math.round(v * 100) / 100;
+const createSubject = () => ({ code: "", credit: "", grade: "" });
 
 export default function GPA() {
+  const { theme } = useContext(ThemeContext);
+
   const [semesterName, setSemesterName] = useState("");
-  const [subjects, setSubjects] = useState(
-    Array.from({ length: 5 }, () => createSubject())
-  );
+  const [subjects, setSubjects] = useState(Array.from({ length: 5 }, createSubject));
   const [gpa, setGpa] = useState(null);
   const [history, setHistory] = useState([]);
   const [editingRecord, setEditingRecord] = useState(null);
@@ -62,13 +56,12 @@ export default function GPA() {
 
   const addSubject = () => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setSubjects([...subjects, createSubject()]);
+    setSubjects((s) => [...s, createSubject()]);
   };
 
   const deleteSubject = (index) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    const updated = subjects.filter((_, i) => i !== index);
-    setSubjects(updated);
+    setSubjects((s) => s.filter((_, i) => i !== index));
   };
 
   const clearAllFields = () => {
@@ -76,33 +69,32 @@ export default function GPA() {
     setSemesterName("");
     setGpa(null);
     setEditingRecord(null);
-    setSubjects(Array.from({ length: 5 }, () => createSubject()));
+    setSubjects(Array.from({ length: 5 }, createSubject));
   };
 
   const updateSubject = (i, field, value) => {
-    const updated = [...subjects];
-    updated[i] = { ...updated[i], [field]: value };
-    setSubjects(updated);
+    setSubjects((prev) => {
+      const copy = [...prev];
+      copy[i] = { ...copy[i], [field]: value };
+      return copy;
+    });
   };
 
-  // 🎯 GPA = Σ(Ci×GPi) / ΣCi
   const calculateGPA = () => {
-    // 🔍 VALIDATION
     for (let i = 0; i < subjects.length; i++) {
       const s = subjects[i];
       if (!s.code.trim() || !s.credit.trim() || !s.grade.trim()) {
-        Alert.alert("Missing Fields", `Fill all fields in Subject ${i + 1}`);
+        Alert.alert("Missing Fields", `Fill all fields for subject ${i + 1}`);
         return;
       }
       if (isNaN(s.credit) || isNaN(s.grade)) {
-        Alert.alert("Invalid Input", `Credit & Grade must be numbers (Subject ${i + 1})`);
+        Alert.alert("Invalid Input", `Credit & Grade must be numbers (subject ${i + 1})`);
         return;
       }
     }
 
     let totalCredits = 0;
     let totalWeighted = 0;
-
     subjects.forEach((s) => {
       const c = parseFloat(s.credit);
       const g = parseFloat(s.grade);
@@ -115,307 +107,179 @@ export default function GPA() {
       return;
     }
 
-    const rounded = round2(totalWeighted / totalCredits).toFixed(2);
-    setGpa(rounded);
+    const final = round2(totalWeighted / totalCredits).toFixed(2);
+    setGpa(final);
 
     if (editingRecord) {
-      const updatedHistory = history.map((item) =>
+      const updated = history.map((item) =>
         item.id === editingRecord.id
-          ? {
-              ...item,
-              name: semesterName,
-              gpa: rounded,
-              subjects,
-              totalCredits,
-              totalWeighted,
-              date: new Date().toLocaleString(),
-            }
+          ? { ...item, name: semesterName, gpa: final, subjects, totalCredits, totalWeighted, date: new Date().toLocaleString() }
           : item
       );
-
-      updateHistory(updatedHistory);
+      updateHistory(updated);
       setEditingRecord(null);
     } else {
-      const record = {
-        id: Date.now().toString(),
-        name: semesterName || "Unnamed Semester",
-        gpa: rounded,
-        subjects,
-        totalCredits,
-        totalWeighted,
-        date: new Date().toLocaleString(),
-      };
-
+      const record = { id: Date.now().toString(), name: semesterName || "Unnamed Semester", gpa: final, subjects, totalCredits, totalWeighted, date: new Date().toLocaleString() };
       saveHistory(record);
     }
 
-    // 🎨 SMOOTH CLEAR ANIMATION
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-
-    // 🧹 CLEAR INPUT FIELDS
     setSemesterName("");
-    setSubjects(Array.from({ length: 5 }, () => createSubject()));
-    setEditingRecord(null);
-
-    // 📜 AUTO SCROLL TO SHOW RESULT
-    setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    }, 300);
+    setSubjects(Array.from({ length: 5 }, createSubject));
+    scrollRef.current?.scrollToEnd({ animated: true });
   };
 
   const deleteRecord = (id) => {
-    Alert.alert("Delete Record", "Are you sure you want to delete this record?", [
+    Alert.alert("Delete Record", "Are you sure?", [
       { text: "Cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          const updated = history.filter((item) => item.id !== id);
-          setHistory(updated);
-          await AsyncStorage.setItem("gpa_history", JSON.stringify(updated));
-        },
-      },
+      { text: "Delete", style: "destructive", onPress: async () => {
+        const updated = history.filter((item) => item.id !== id);
+        setHistory(updated);
+        await AsyncStorage.setItem("gpa_history", JSON.stringify(updated));
+      }},
     ]);
   };
 
   const clearAll = () => {
-    Alert.alert("Clear All Records", "This will delete ALL GPA records. Continue?", [
+    Alert.alert("Clear All Records", "This will delete all GPA records. Continue?", [
       { text: "Cancel" },
-      {
-        text: "Clear All",
-        style: "destructive",
-        onPress: async () => {
-          setHistory([]);
-          await AsyncStorage.removeItem("gpa_history");
-        },
-      },
+      { text: "Clear All", style: "destructive", onPress: async () => {
+        setHistory([]); await AsyncStorage.removeItem("gpa_history");
+      } },
     ]);
   };
 
-  const editRecord = (record) => {
-    setEditingRecord(record);
-    setSemesterName(record.name);
-    setGpa(record.gpa);
-
-    const cleanSubjects = record.subjects.map((s) => ({
-      code: s.code ?? "",
-      credit: s.credit?.toString() ?? "",
-      grade: s.grade?.toString() ?? "",
-    }));
-
-    setSubjects(cleanSubjects);
+  const editRecord = (rec) => {
+    setEditingRecord(rec);
+    setSemesterName(rec.name);
+    setGpa(rec.gpa);
+    setSubjects(rec.subjects.map(s => ({ code: s.code ?? "", credit: s.credit?.toString() ?? "", grade: s.grade?.toString() ?? "" })));
+    setTimeout(() => scrollRef.current?.scrollTo({ y: 0, animated: true }), 120);
   };
 
   return (
-    <ScrollView style={styles.container} ref={scrollRef}>
-      <Text style={styles.title}>GPA Calculator</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      <ScrollView contentContainerStyle={[styles.container]} ref={scrollRef}>
+        {/* Add safe spacing from top */}
+        <View style={{ height: 40 }} /> 
+        <ThemeToggle />
+        <Text style={[styles.title, { color: theme.text }]}>GPA Calculator</Text>
 
-      <TextInput
-        style={styles.semInput}
-        placeholder="Enter Semester Name"
-        value={semesterName}
-        onChangeText={setSemesterName}
-      />
+        <TextInput
+          style={[styles.semInput, { backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }]}
+          placeholder="Enter Semester Name"
+          placeholderTextColor={theme.textSecondary}
+          value={semesterName}
+          onChangeText={setSemesterName}
+        />
 
-      <Text style={styles.subtitle}>Subjects</Text>
-      <View style={styles.subjectHeaderRow}>
-        <Text style={[styles.subjectHeaderText, { flex: 1.2 }]}>Subject Code</Text>
-        <Text style={[styles.subjectHeaderText, { flex: 1 }]}>Credit Hour</Text>
-        <Text style={[styles.subjectHeaderText, { flex: 1 }]}>Grade Point</Text>
-        <Text style={[styles.subjectHeaderText, { width: 35 }]}></Text>
-      </View>
+        <Text style={[styles.subtitle, { color: theme.text }]}>Subjects</Text>
 
-      {/* SUBJECT LIST */}
-      {subjects.map((s, i) => (
-        <View key={i} style={styles.rowBlock}>
-          <TextInput
-            style={[styles.inputSmall, { flex: 1.3 }]}
-            placeholder="Code"
-            value={s.code}
-            onChangeText={(v) => updateSubject(i, "code", v)}
-          />
-
-          <TextInput
-            style={[styles.inputSmall, { flex: 1 }]}
-            placeholder="Cr"
-            keyboardType="numeric"
-            value={s.credit}
-            onChangeText={(v) => updateSubject(i, "credit", v)}
-          />
-
-          <TextInput
-            style={[styles.inputSmall, { flex: 1 }]}
-            placeholder="GP"
-            keyboardType="numeric"
-            value={s.grade}
-            onChangeText={(v) => updateSubject(i, "grade", v)}
-          />
-
-          <TouchableOpacity onPress={() => deleteSubject(i)} style={styles.deleteBtn}>
-            <Text style={styles.delText}>✖</Text>
-          </TouchableOpacity>
+        <View style={styles.headerRow}>
+          <Text style={[styles.headerText, { color: theme.textSecondary, flex: 1.3 }]}>Subject</Text>
+          <Text style={[styles.headerText, { color: theme.textSecondary, flex: 1 }]}>Credit</Text>
+          <Text style={[styles.headerText, { color: theme.textSecondary, flex: 1 }]}>Grade</Text>
+          <View style={{ width: 40 }} />
         </View>
-      ))}
 
-      <TouchableOpacity style={styles.addButton} onPress={addSubject}>
-        <Text style={styles.addText}>+ Add Subject</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.clearInputFields} onPress={clearAllFields}>
-        <Text style={styles.clearInputText}>Clear All Fields</Text>
-      </TouchableOpacity>
-
-      <Button
-        title={editingRecord ? "Update GPA Record" : "Calculate GPA"}
-        onPress={calculateGPA}
-      />
-
-      {gpa && <Text style={styles.result}>Semester GPA: {gpa}</Text>}
-
-      <Text style={styles.subtitle}>Recent GPA Records</Text>
-
-      {history.length === 0 ? (
-        <Text style={{ textAlign: "center", color: "#777" }}>
-          No previous GPA records found.
-        </Text>
-      ) : (
-        history.map((item) => (
-          <View key={item.id} style={styles.historyItem}>
-            <Text style={styles.historyName}>{item.name}</Text>
-            <Text style={styles.historyGpa}>GPA: {item.gpa}</Text>
-            <Text style={styles.historyTime}>{item.date}</Text>
-
-            <View style={styles.historyActions}>
-              <TouchableOpacity onPress={() => editRecord(item)}>
-                <Text style={styles.editText}>Edit</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity onPress={() => deleteRecord(item.id)}>
-                <Text style={styles.deleteText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
+        {subjects.map((s, i) => (
+          <View key={i} style={[styles.rowCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+            <TextInput
+              value={s.code}
+              onChangeText={(v) => updateSubject(i, "code", v)}
+              placeholder="Code"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.inputSmall, { backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }]}
+            />
+            <TextInput
+              value={s.credit}
+              onChangeText={(v) => updateSubject(i, "credit", v)}
+              placeholder="Cr"
+              keyboardType="numeric"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.inputSmall, { backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }]}
+            />
+            <TextInput
+              value={s.grade}
+              onChangeText={(v) => updateSubject(i, "grade", v)}
+              placeholder="GP"
+              keyboardType="numeric"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.inputSmall, { backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }]}
+            />
+            <TouchableOpacity onPress={() => deleteSubject(i)} style={[styles.deleteCircle, { backgroundColor: theme.card }]}>
+              <Text style={{ color: "red", fontWeight: "700" }}>✕</Text>
+            </TouchableOpacity>
           </View>
-        ))
-      )}
+        ))}
 
-      {history.length > 0 && (
-        <TouchableOpacity style={styles.clearAll} onPress={clearAll}>
-          <Text style={styles.clearAllText}>Clear All Records</Text>
+        <TouchableOpacity onPress={addSubject} style={{ alignSelf: "center", marginVertical: 12 }}>
+          <Text style={{ color: theme.primary, fontSize: 16 }}>+ Add Subject</Text>
         </TouchableOpacity>
-      )}
-    </ScrollView>
+
+        <TouchableOpacity onPress={clearAllFields} style={{ alignSelf: "center", marginBottom: 16 }}>
+          <Text style={{ color: "red", fontSize: 16, fontWeight: "600" }}>Clear All Fields</Text>
+        </TouchableOpacity>
+
+        <View style={{ marginBottom: 12 }}>
+          <Button title={editingRecord ? "Update GPA Record" : "Calculate GPA"} onPress={calculateGPA} color={theme.primary} />
+        </View>
+
+        {gpa && <Text style={[styles.result, { color: theme.primary }]}>Semester GPA: {gpa}</Text>}
+
+        <Text style={[styles.subtitle, { color: theme.text, marginTop: 18 }]}>Recent GPA Records</Text>
+
+        {history.length === 0 ? (
+          <Text style={{ color: theme.textSecondary, textAlign: "center", marginTop: 10 }}>No previous GPA records.</Text>
+        ) : (
+          history.map((item) => (
+            <View key={item.id} style={[styles.historyCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View>
+                <Text style={{ fontSize: 17, fontWeight: "700", color: theme.text }}>{item.name}</Text>
+                <Text style={{ color: theme.textSecondary }}>GPA: {item.gpa}</Text>
+                <Text style={{ color: theme.textSecondary }}>{item.date}</Text>
+              </View>
+
+              <View style={styles.historyActions}>
+                <TouchableOpacity onPress={() => editRecord(item)}><Text style={{ color: "green", fontWeight: "700" }}>Edit</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => deleteRecord(item.id)}><Text style={{ color: "red", fontWeight: "700" }}>Delete</Text></TouchableOpacity>
+              </View>
+            </View>
+          ))
+        )}
+
+        {history.length > 0 && (
+          <TouchableOpacity onPress={clearAll} style={{ alignSelf: "center", marginTop: 14 }}>
+            <Text style={{ color: "red", fontSize: 16, fontWeight: "700" }}>Clear All Records</Text>
+          </TouchableOpacity>
+        )}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-// STYLES
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  title: { fontSize: 28, fontWeight: "bold", textAlign: "center" },
-  semInput: {
-    borderWidth: 1,
-    padding: 12,
-    borderRadius: 8,
-    marginVertical: 15,
-  },
-
-  subtitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    marginTop: 20,
-    marginBottom: 10,
-  },
-
-  subjectHeaderRow: {
-    flexDirection: "row",
-    marginBottom: 8,
-    paddingHorizontal: 4,
-  },
-
-  subjectHeaderText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#444",
-  },
-
-  rowBlock: {
+  container: { padding: 20, paddingBottom: 36 },
+  title: { fontSize: 28, fontWeight: "700", textAlign: "center", marginBottom: 12 },
+  semInput: { borderWidth: 1, padding: 12, borderRadius: 12, marginVertical: 12 },
+  subtitle: { fontSize: 18, fontWeight: "700", marginTop: 10, marginBottom: 8 },
+  headerRow: { flexDirection: "row", marginBottom: 8, alignItems: "center" },
+  headerText: { fontSize: 13, fontWeight: "700" },
+  rowCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#f2f2f2",
-    padding: 8,
-    borderRadius: 10,
-    marginBottom: 10,
-    gap: 8,
-  },
-
-  inputSmall: {
-    borderWidth: 1,
-    padding: 10,
-    borderRadius: 6,
-    fontSize: 14,
-  },
-
-  deleteBtn: {
-    backgroundColor: "#ffdddd",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-
-  delText: {
-    color: "red",
-    fontWeight: "bold",
-  },
-
-  addButton: {
-    alignSelf: "center",
-    marginVertical: 10,
-  },
-
-  addText: { color: "#0077ff", fontSize: 16 },
-
-  clearInputFields: {
-    alignSelf: "center",
-    marginBottom: 20,
-  },
-
-  clearInputText: {
-    color: "red",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-
-  result: {
-    fontSize: 26,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginTop: 20,
-    color: "#0077ff",
-  },
-
-  historyItem: {
-    backgroundColor: "#f9f9f9",
     padding: 12,
-    borderRadius: 10,
-    marginVertical: 10,
+    borderRadius: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    shadowOffset: { width: 6, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 12,
+    elevation: 6,
   },
-
-  historyName: { fontSize: 18, fontWeight: "bold" },
-  historyGpa: { fontSize: 16, marginTop: 4 },
-  historyTime: { fontSize: 13, color: "#666", marginTop: 4 },
-
-  historyActions: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 10,
-  },
-
-  editText: { color: "green", fontWeight: "600" },
-  deleteText: { color: "red", fontWeight: "600" },
-
-  clearAll: { marginTop: 20, alignSelf: "center" },
-  clearAllText: {
-    color: "red",
-    fontSize: 16,
-    fontWeight: "700",
-  },
+  inputSmall: { borderWidth: 1, padding: 10, borderRadius: 8, flex: 1, marginRight: 8 },
+  deleteCircle: { width: 36, height: 36, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  result: { fontSize: 22, fontWeight: "800", textAlign: "center", marginTop: 12 },
+  historyCard: { padding: 14, borderRadius: 12, marginVertical: 10, borderWidth: 1, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  historyActions: { flexDirection: "row", gap: 16, alignItems: "center" },
 });

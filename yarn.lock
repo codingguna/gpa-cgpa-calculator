@@ -1198,7 +1198,7 @@
 
 "@expo/vector-icons@^15.0.3":
   version "15.0.3"
-  resolved "https://registry.yarnpkg.com/@expo/vector-icons/-/vector-icons-15.0.3.tgz#12c38d4e6cc927dd0500e4591ac00672a8909748"
+  resolved "https://registry.npmjs.org/@expo/vector-icons/-/vector-icons-15.0.3.tgz#12c38d4e6cc927dd0500e4591ac00672a8909748"
   integrity sha512-SBUyYKphmlfUBqxSfDdJ3jAdEVSALS2VUPOUyqn48oZmb2TL/O7t7/PQm5v4NQujYEPLPMTLn9KVw6H7twwbTA==
 
 "@expo/ws-tunnel@^1.0.1":

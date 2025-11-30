@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+// app/ogpa.js
+import React, { useEffect, useState, useContext } from "react";
 import {
   View,
   Text,
-  StyleSheet,
   TouchableOpacity,
   ScrollView,
   TextInput,
@@ -10,19 +10,19 @@ import {
   LayoutAnimation,
   UIManager,
   Platform,
+  SafeAreaView,
+  StyleSheet,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
+import ThemeToggle from "../components/ThemeToggle";
+import { ThemeContext } from "../components/ThemeContext";
 
-// Enable smooth animation on Android
-if (Platform.OS === "android" && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
-// round to 2 decimals
 const round2 = (v) => Math.round(v * 100) / 100;
 
 export default function OGPA() {
+  const { theme } = useContext(ThemeContext);
   const router = useRouter();
 
   const [mode, setMode] = useState(null);
@@ -42,28 +42,17 @@ export default function OGPA() {
   const loadData = async () => {
     const gpa = await AsyncStorage.getItem("gpa_history");
     const ogpa = await AsyncStorage.getItem("ogpa_history");
-
     if (gpa) setGpaHistory(JSON.parse(gpa));
     if (ogpa) setOgpaHistory(JSON.parse(ogpa));
   };
 
   const toggleSelect = (id) => {
-    if (selected.includes(id)) {
-      setSelected(selected.filter((x) => x !== id));
-    } else {
-      setSelected([...selected, id]);
-    }
+    setSelected((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
   };
 
   const calculateOGPA = () => {
-    if (selected.length === 0) {
-      Alert.alert("Select Semesters", "Choose at least one semester.");
-      return;
-    }
-    if (!ogpaName.trim()) {
-      Alert.alert("Enter Name", "Please enter OGPA name.");
-      return;
-    }
+    if (selected.length === 0) return Alert.alert("Select Semesters", "Choose at least one semester.");
+    if (!ogpaName.trim()) return Alert.alert("Enter Name", "Please enter OGPA name.");
 
     let totalCredits = 0;
     let totalWeighted = 0;
@@ -76,12 +65,12 @@ export default function OGPA() {
       }
     });
 
-    const ogpaValue = round2(totalWeighted / totalCredits).toFixed(2);
+    const result = round2(totalWeighted / totalCredits).toFixed(2);
 
     const record = {
       id: editingRecord ? editingRecord.id : Date.now().toString(),
       name: ogpaName,
-      ogpa: ogpaValue,
+      ogpa: result,
       totalCredits,
       totalWeighted,
       semesters: selected,
@@ -98,259 +87,150 @@ export default function OGPA() {
 
     setOgpaHistory(updated);
     AsyncStorage.setItem("ogpa_history", JSON.stringify(updated));
-
-    Alert.alert("Success", `OGPA saved as ${ogpaValue}`);
-
+    Alert.alert("Saved", `OGPA saved: ${result}`);
     setOgpaName("");
     setSelected([]);
   };
 
   const deleteOGPA = (id) => {
-    Alert.alert("Delete", "Are you sure you want to delete this OGPA record?", [
+    Alert.alert("Delete OGPA", "Are you sure?", [
       { text: "Cancel" },
-      {
-        text: "Delete",
-        style: "destructive",
-        onPress: async () => {
-          const updated = ogpaHistory.filter((x) => x.id !== id);
-          setOgpaHistory(updated);
-          await AsyncStorage.setItem("ogpa_history", JSON.stringify(updated));
-        },
-      },
+      { text: "Delete", style: "destructive", onPress: async () => {
+        const updated = ogpaHistory.filter((x) => x.id !== id);
+        setOgpaHistory(updated);
+        await AsyncStorage.setItem("ogpa_history", JSON.stringify(updated));
+      }},
     ]);
   };
 
-  const editOGPA = (record) => {
+  const editOGPA = (r) => {
     setMode("recent");
-    setEditingRecord(record);
-    setOgpaName(record.name);
-    setSelected(record.semesters);
+    setEditingRecord(r);
+    setOgpaName(r.name);
+    setSelected(r.semesters);
   };
 
   const toggleExpand = (id) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setExpandedId(expandedId === id ? null : id);
+    setExpandedId((e) => (e === id ? null : id));
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Text style={styles.title}>OGPA Calculator</Text>
+    <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
+      <ScrollView contentContainerStyle={[styles.container]}>
+        {/* Add safe spacing from top */}
+        <View style={{ height: 40 }} />
 
-      {!mode && (
-        <>
-          <TouchableOpacity style={styles.btn} onPress={() => setMode("recent")}>
-            <Text style={styles.btnText}>Calculate from Recent GPA Records</Text>
-          </TouchableOpacity>
+        <ThemeToggle />
+        <Text style={[styles.title, { color: theme.text }]}>OGPA Calculator</Text>
 
-          <TouchableOpacity
-            style={styles.btnSecondary}
-            onPress={() => router.push("/gpa")}
-          >
-            <Text style={styles.btnTextSecondary}>Add New Semester Records</Text>
-          </TouchableOpacity>
-        </>
-      )}
-
-      {/* Recent GPA Mode */}
-      {mode === "recent" && (
-        <>
-          <Text style={styles.subtitle}>Select Semesters</Text>
-
-          {gpaHistory.length === 0 ? (
-            <Text style={styles.noData}>No GPA records found.</Text>
-          ) : (
-            gpaHistory.map((item) => (
-              <TouchableOpacity
-                key={item.id}
-                style={[
-                  styles.gpaItem,
-                  selected.includes(item.id) && styles.selectedItem,
-                ]}
-                onPress={() => toggleSelect(item.id)}
-              >
-                <Text style={styles.semName}>{item.name}</Text>
-                <Text>GPA: {item.gpa}</Text>
-                <Text>Credits: {item.totalCredits}</Text>
-              </TouchableOpacity>
-            ))
-          )}
-
-          {/* OGPA name input */}
-          <TextInput
-            style={styles.input}
-            placeholder="Enter OGPA Name"
-            value={ogpaName}
-            onChangeText={setOgpaName}
-          />
-
-          <TouchableOpacity style={styles.calcBtn} onPress={calculateOGPA}>
-            <Text style={styles.calcText}>
-              {editingRecord ? "Update OGPA" : "Calculate OGPA"}
-            </Text>
-          </TouchableOpacity>
-        </>
-      )}
-
-      {/* OGPA SAVED LIST */}
-      <Text style={[styles.subtitle, { marginTop: 30 }]}>Saved OGPA</Text>
-
-      {ogpaHistory.length === 0 ? (
-        <Text style={styles.noData}>No OGPA records saved.</Text>
-      ) : (
-        ogpaHistory.map((item) => (
-          <View key={item.id} style={styles.ogpaItem}>
-            {/* Touchable Header */}
-            <TouchableOpacity onPress={() => toggleExpand(item.id)}>
-              <Text style={styles.semName}>{item.name}</Text>
-              <Text>OGPA: {item.ogpa}</Text>
-              <Text>Total Credits: {item.totalCredits}</Text>
+        {!mode && (
+          <>
+            <TouchableOpacity style={[styles.btn, { backgroundColor: theme.card, borderColor: theme.border }]} onPress={() => setMode("recent")}>
+              <Text style={{ color: theme.text, fontSize: 16, fontWeight: "700" }}>Calculate from Recent GPA</Text>
             </TouchableOpacity>
 
-            {/* EXPANDED DETAILS */}
-            {expandedId === item.id && (
-              <View style={styles.expandBox}>
-                <Text style={styles.expTitle}>Included Semesters:</Text>
+            <TouchableOpacity style={[styles.btnSecondary, { borderColor: theme.primary }]} onPress={() => router.push("/gpa")}>
+              <Text style={[styles.btnTextSecondary, { color: theme.primary }]}>Add New Semester Records</Text>
+            </TouchableOpacity>
+          </>
+        )}
 
-                {item.semesters.map((sid) => {
-                  const sem = gpaHistory.find((x) => x.id === sid);
-                  if (!sem) return null;
-                  return (
-                    <View key={sid} style={styles.expItem}>
-                      <Text style={styles.expSemName}>{sem.name}</Text>
-                      <Text>GPA: {sem.gpa}</Text>
-                      <Text>Credits: {sem.totalCredits}</Text>
-                      <Text>Weighted: {sem.totalWeighted}</Text>
-                    </View>
-                  );
-                })}
-              </View>
+        {mode === "recent" && (
+          <>
+            <Text style={[styles.subtitle, { color: theme.text }]}>Select Semesters</Text>
+
+            {gpaHistory.length === 0 ? (
+              <Text style={{ color: theme.textSecondary }}>No GPA records found.</Text>
+            ) : (
+              gpaHistory.map((item) => (
+                <TouchableOpacity
+                  key={item.id}
+                  onPress={() => toggleSelect(item.id)}
+                  style={[
+                    styles.gpaCard,
+                    {
+                      backgroundColor: selected.includes(item.id) ? theme.primarySoft.replace("22", "33") : theme.card,
+                      borderColor: theme.border,
+                    },
+                  ]}
+                >
+                  <View>
+                    <Text style={{ color: theme.text, fontSize: 16, fontWeight: "700" }}>{item.name}</Text>
+                    <Text style={{ color: theme.textSecondary }}>GPA: {item.gpa}</Text>
+                  </View>
+                  <View>
+                    <Text style={{ color: theme.textSecondary }}>Credits: {item.totalCredits}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))
             )}
 
-            {/* Buttons */}
-            <View style={styles.rowBtns}>
-              <TouchableOpacity onPress={() => editOGPA(item)}>
-                <Text style={styles.editText}>Edit</Text>
+            <TextInput
+              value={ogpaName}
+              onChangeText={setOgpaName}
+              placeholder="Enter OGPA Name"
+              placeholderTextColor={theme.textSecondary}
+              style={[styles.input, { backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }]}
+            />
+
+            <TouchableOpacity style={[styles.calcBtn, { backgroundColor: theme.primary }]} onPress={calculateOGPA}>
+              <Text style={[styles.calcText, { color: theme.buttonText }]}>{editingRecord ? "Update OGPA" : "Calculate OGPA"}</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        <Text style={[styles.subtitle, { color: theme.text, marginTop: 20 }]}>Saved OGPA</Text>
+
+        {ogpaHistory.length === 0 ? <Text style={{ color: theme.textSecondary }}>No OGPA saved.</Text> :
+          ogpaHistory.map((item) => (
+            <View key={item.id} style={[styles.ogpaCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <TouchableOpacity onPress={() => toggleExpand(item.id)}>
+                <Text style={{ fontSize: 16, fontWeight: "700", color: theme.text }}>{item.name}</Text>
+                <Text style={{ color: theme.textSecondary }}>OGPA: {item.ogpa}</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity onPress={() => deleteOGPA(item.id)}>
-                <Text style={styles.deleteText}>Delete</Text>
-              </TouchableOpacity>
+              {expandedId === item.id && (
+                <View style={[styles.expandBox, { backgroundColor: theme.cardInner, borderColor: theme.border }]}>
+                  <Text style={{ color: theme.text, fontWeight: "700" }}>Included Semesters</Text>
+                  {item.semesters.map((sid) => {
+                    const sem = gpaHistory.find((x) => x.id === sid);
+                    if (!sem) return null;
+                    return (
+                      <View key={sid} style={[styles.semRow, { borderBottomColor: theme.border }]}>
+                        <Text style={{ color: theme.text }}>{sem.name}</Text>
+                        <Text style={{ color: theme.textSecondary }}>GPA: {sem.gpa}</Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              )}
+
+              <View style={styles.rowBtns}>
+                <TouchableOpacity onPress={() => editOGPA(item)}><Text style={{ color: "green", fontWeight: "700" }}>Edit</Text></TouchableOpacity>
+                <TouchableOpacity onPress={() => deleteOGPA(item.id)}><Text style={{ color: "red", fontWeight: "700" }}>Delete</Text></TouchableOpacity>
+              </View>
             </View>
-          </View>
-        ))
-      )}
-    </ScrollView>
+          ))
+        }
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-
-  title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-
-  subtitle: { fontSize: 20, fontWeight: "600", marginTop: 20 },
-
-  btn: {
-    backgroundColor: "#0077ff",
-    padding: 14,
-    borderRadius: 8,
-    marginBottom: 15,
-  },
-
-  btnText: { color: "white", textAlign: "center", fontSize: 16 },
-
-  btnSecondary: {
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: "#0077ff",
-  },
-
-  btnTextSecondary: {
-    color: "#0077ff",
-    textAlign: "center",
-    fontSize: 16,
-  },
-
-  gpaItem: {
-    backgroundColor: "#f2f2f2",
-    padding: 12,
-    borderRadius: 10,
-    marginVertical: 8,
-  },
-
-  selectedItem: {
-    backgroundColor: "#d0e8ff",
-    borderWidth: 1,
-    borderColor: "#0077ff",
-  },
-
-  semName: { fontSize: 18, fontWeight: "bold" },
-
-  input: {
-    borderWidth: 1,
-    padding: 12,
-    borderRadius: 8,
-    marginVertical: 15,
-  },
-
-  calcBtn: {
-    backgroundColor: "#009944",
-    padding: 14,
-    borderRadius: 8,
-  },
-
-  calcText: {
-    color: "white",
-    textAlign: "center",
-    fontSize: 18,
-    fontWeight: "600",
-  },
-
-  ogpaItem: {
-    backgroundColor: "#e3ffe6",
-    padding: 12,
-    borderRadius: 10,
-    marginVertical: 10,
-  },
-
-  expandBox: {
-    backgroundColor: "#fff",
-    padding: 10,
-    borderRadius: 8,
-    marginTop: 10,
-    borderWidth: 1,
-    borderColor: "#ddd",
-  },
-
-  expTitle: { fontSize: 16, fontWeight: "700", marginBottom: 6 },
-
-  expItem: {
-    backgroundColor: "#f5faff",
-    padding: 8,
-    borderRadius: 6,
-    marginBottom: 8,
-  },
-
-  expSemName: { fontWeight: "600", fontSize: 16 },
-
-  noData: {
-    marginTop: 10,
-    color: "#777",
-    fontSize: 16,
-  },
-
-  rowBtns: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: 12,
-  },
-
-  editText: { color: "green", fontWeight: "600" },
-  deleteText: { color: "red", fontWeight: "600" },
+  container: { padding: 20, paddingBottom: 36 },
+  title: { fontSize: 26, fontWeight: "700", textAlign: "center", marginBottom: 12 },
+  btn: { padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 12, alignItems: "center", shadowOffset: { width: 8, height: 8 }, shadowOpacity: 0.18, shadowRadius: 12, elevation: 8 },
+  btnSecondary: { padding: 14, borderRadius: 12, borderWidth: 1, marginBottom: 12, alignItems: "center" },
+  btnTextSecondary: { fontSize: 16, fontWeight: "700" },
+  subtitle: { fontSize: 18, fontWeight: "700", marginBottom: 8 },
+  gpaCard: { padding: 12, borderRadius: 12, borderWidth: 1, marginBottom: 10, flexDirection: "row", justifyContent: "space-between", alignItems: "center", shadowOffset: { width: 8, height: 8 }, shadowOpacity: 0.16, shadowRadius: 12, elevation: 6 },
+  input: { borderWidth: 1, padding: 12, borderRadius: 10, marginVertical: 12 },
+  calcBtn: { padding: 14, borderRadius: 12, alignItems: "center" },
+  calcText: { fontSize: 16, fontWeight: "700" },
+  ogpaCard: { padding: 12, borderRadius: 12, borderWidth: 1, marginVertical: 8 },
+  expandBox: { padding: 10, borderRadius: 8, marginTop: 10, borderWidth: 1 },
+  semRow: { paddingVertical: 8, borderBottomWidth: 1 },
+  rowBtns: { flexDirection: "row", justifyContent: "space-between", marginTop: 10 },
 });
