@@ -1,7 +1,7 @@
 name: Manual EAS APK Build (Auto Version)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: #manual
 
 jobs:
   build:
