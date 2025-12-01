@@ -53,9 +53,13 @@ jobs:
       - name: Set EXPO_TOKEN
         run: echo "EXPO_TOKEN=${{ secrets.EXPO_TOKEN }}" >> $GITHUB_ENV
 
+      # Install EAS CLI locally
+      - name: Install EAS CLI
+        run: npm install eas-cli --save-dev
+      
       # 8. Run EAS Build (APK)
       - name: EAS Build (APK)
-        run: npx eas build --platform android --profile preview --non-interactive --wait
+        run: npx eas build --platform android --profile production --non-interactive --wait
 
       # 9. Download APK artifact
       - name: Download EAS Artifact
