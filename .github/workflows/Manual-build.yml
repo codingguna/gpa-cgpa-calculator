@@ -1,5 +1,8 @@
 name: Manual EAS APK Build (Auto Version)
 
+permissions:
+  contents: write   # needed for GitHub releases
+
 on:
   workflow_dispatch:
 
