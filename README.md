@@ -3,6 +3,11 @@ A modern, theme-enabled GPA & CGPA calculator built using **React Native**, **Ex
 
 ---
 
+📥 **Download Latest APK**  
+👉 [**Go to Releases**](../../releases/latest) to download the newest version of the app.
+
+---
+
 # 📱 Screenshots
 
 > Replace the image URLs with your own screenshots.
