@@ -61,8 +61,11 @@ jobs:
         id: eas
         run: |
           BUILD_JSON=$(npx eas build --platform android --profile production --non-interactive --wait --json)
-          echo "build_json=$BUILD_JSON" >> $GITHUB_OUTPUT
-
+          {
+           echo 'build_json<<EOF'
+           echo "$BUILD_JSON"
+           echo 'EOF'
+           } >> $GITHUB_OUTPUT
       # 10. Download APK from build_json
       - name: Download EAS Artifact
         id: apk
