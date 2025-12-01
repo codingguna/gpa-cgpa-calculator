@@ -1,69 +1,80 @@
-import { useEffect, useRef } from "react";
-import { View, Text, StyleSheet, Animated, Image, Dimensions } from "react-native";
+import { useEffect, useRef, useContext } from "react";
+import { View, Text, StyleSheet, Animated, Dimensions, Image } from "react-native";
 import { useRouter } from "expo-router";
+import { ThemeContext } from "../components/ThemeContext";
+
+const { width } = Dimensions.get("window");
 
 export default function Welcome() {
   const router = useRouter();
+  const { theme } = useContext(ThemeContext);
 
-  const slideAnim = useRef(new Animated.Value(40)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const scaleAnim = useRef(new Animated.Value(0.6)).current;
+  const scaleAnim = useRef(new Animated.Value(0.7)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
 
   useEffect(() => {
-    // Run animation sequence: fade + scale + slide
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 1200,
-        useNativeDriver: true,
+        duration: 1000,
+        useNativeDriver: true
       }),
-      Animated.timing(scaleAnim, {
+      Animated.spring(scaleAnim, {
         toValue: 1,
-        duration: 1200,
-        useNativeDriver: true,
+        friction: 5,
+        tension: 80,
+        useNativeDriver: true
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
-        duration: 1200,
-        useNativeDriver: true,
-      }),
+        duration: 800,
+        useNativeDriver: true
+      })
     ]).start();
 
-    // Auto navigate after 5 sec
     const timer = setTimeout(() => {
       router.replace("/");
-    }, 5000);
+    }, 2500); // faster and smoother
 
     return () => clearTimeout(timer);
   }, []);
 
   return (
-    <View style={styles.container}>
-      <Animated.Image
-        source={require("../assets/images/icon.png")}
-        style={[
-          styles.logo,
-          {
-            opacity: fadeAnim,
-            transform: [
-              { translateY: slideAnim },
-              { scale: scaleAnim },
-            ],
-          },
-        ]}
-        resizeMode="contain"
-      />
+    <View style={[styles.container, { backgroundColor: theme.background }]}>
+      
+      {/* LOGO */}
+      <Animated.View
+        style={{
+          opacity: fadeAnim,
+          transform: [{ scale: scaleAnim }, { translateY: slideAnim }],
+        }}
+      >
+        <Image
+          source={require("../assets/images/icon.png")}
+          style={styles.logo}
+        />
+      </Animated.View>
 
+      {/* TITLE */}
       <Animated.Text
         style={[
           styles.title,
-          { opacity: fadeAnim }
+          { color: theme.text, opacity: fadeAnim }
         ]}
       >
         GPA / CGPA Calculator
       </Animated.Text>
 
-      <Text style={styles.loading}>Loading...</Text>
+      {/* LOADING */}
+      <Animated.Text
+        style={[
+          styles.loading,
+          { color: theme.primary, opacity: fadeAnim }
+        ]}
+      >
+        Loading...
+      </Animated.Text>
     </View>
   );
 }
@@ -73,23 +84,25 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    padding: 20,
   },
+
   logo: {
-    width: 180,
-    height: 180,
-    marginBottom: 20,
+    width: width * 0.45,  // responsive size
+    height: width * 0.45,
+    resizeMode: "contain",
+    borderRadius: 20,
   },
+
   title: {
-    fontSize: 26,
-    fontWeight: "bold",
-    marginTop: 10,
-    color: "#333",
+    marginTop: 20,
+    fontSize: 24,
+    fontWeight: "700",
+    textAlign: "center",
   },
+
   loading: {
-    marginTop: 30,
+    marginTop: 12,
     fontSize: 16,
-    color: "#0077ff",
+    fontWeight: "500",
   },
 });

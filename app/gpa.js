@@ -176,9 +176,9 @@ export default function GPA() {
         <Text style={[styles.subtitle, { color: theme.text }]}>Subjects</Text>
 
         <View style={styles.headerRow}>
-          <Text style={[styles.headerText, { color: theme.textSecondary, flex: 1.3 }]}>Subject</Text>
-          <Text style={[styles.headerText, { color: theme.textSecondary, flex: 1 }]}>Credit</Text>
-          <Text style={[styles.headerText, { color: theme.textSecondary, flex: 1 }]}>Grade</Text>
+          <Text style={[styles.headerText, { color: theme.textSecondary, flex: 1.3 }]}>Subject code</Text>
+          <Text style={[styles.headerText, { color: theme.textSecondary, flex: 1 }]}>Credit Hour</Text>
+          <Text style={[styles.headerText, { color: theme.textSecondary, flex: 1 }]}>Grade Point</Text>
           <View style={{ width: 40 }} />
         </View>
 
